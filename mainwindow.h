@@ -1,7 +1,7 @@
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
-#include <QMainWindow>
+#include <QtWidgets/QMainWindow>
 #include <QVector>
 
 #include "cdbfile.h"
@@ -20,23 +20,39 @@ public:
     ~MainWindow();
     
 private slots:
-    void doLog(QString str);
-    void on_buttonUruchom_clicked();
-    void on_buttonOtworz_clicked();
-    void on_buttonWybierzDXF_clicked();
-    void on_actionWyj_cie_triggered();
-    void on_actionO_programie_triggered();
-    void on_buttonOtworzKolka_clicked();
-    void on_buttonOtworzFolder_clicked();
+    void on_buttonOpenDb_clicked();
+    void on_buttonSelectDxfPath_clicked();
+    void on_buttonStartCirclesSave_clicked();
+    void on_actionExit_triggered();
+    void on_actionAbout_triggered();
+    void on_buttonOpenDxfFile_clicked();
+    void on_buttonOpenDxfPathFolder_clicked();
 
 private:
-    char* sciezkaDoBazy;
-    QString sciezkaDXF;
-    int rozmiaryKol[9];
-    int iloscKolKateg[9];
-    QVector<rekord> wekRekordy[9];
-    CDBFile baza;
     Ui::MainWindow *ui;
+
+    enum DatabaseType{
+        DBF_DATABASE,
+        XLS_DATABASE
+    };
+
+    void configureBeforeRun();
+    bool readDbfDatabase();
+    void readXlsDatabase();
+    bool saveToDxfFile();
+    void addEnergyRecord(rekord newRecord);
+    void doLog(QString str);
+
+    //char* mDatabasePath;
+    QString mDatabasePath;
+    QString mDxfPath;
+    CDBFile mDbfDatabase;
+    DatabaseType mDbType;
+
+    QVector<rekord> mRecordsVec[9];
+    double mDiameterSizes[9];
+    double mPlotScale;
+    bool mSelectedEnergies[9];
 };
 
 #endif // MAINWINDOW_H

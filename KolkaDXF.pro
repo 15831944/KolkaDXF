@@ -4,18 +4,30 @@
 #
 #-------------------------------------------------
 
-QT       += core gui
+QT       += core gui \
+         widgets
 
 TARGET = KolkaDXF
 TEMPLATE = app
 
-SOURCES += main.cpp\
+SOURCES += main.cpp \
         mainwindow.cpp \
         cdbfile.cpp \
-        rekord.cpp
+        rekord.cpp \
+    libxls/ole.c \
+    libxls/xls.c \
+    libxls/xlstool.c
 
 HEADERS  += mainwindow.h \
     cdbfile.h \
-    rekord.h
+    rekord.h \
+    libxls/brdb.c.h \
+    libxls/brdb.h \
+    libxls/ole.h \
+    libxls/xls.h \
+    libxls/xlsstruct.h \
+    libxls/xlstool.h \
+    libxls/xlstypes.h
 
 FORMS    += mainwindow.ui
+

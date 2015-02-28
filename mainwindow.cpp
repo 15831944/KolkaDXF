@@ -1,18 +1,18 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
 
-#include <QFileDialog>
+#include <QtWidgets/QFileDialog>
 #include <QDir>
 #include <QTextStream>
-#include <QMessageBox>
+#include <QtWidgets/QMessageBox>
 #include <QDesktopServices>
 #include <QUrl>
+#include <QtCore/qmath.h>
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
     ui(new Ui::MainWindow)
 {
-
     ui->setupUi(this);
 }
 
@@ -21,187 +21,274 @@ MainWindow::~MainWindow()
     delete ui;
 }
 
+void MainWindow::configureBeforeRun()
+{
+    // Clear old record data
+    for(int i=0; i<=8; ++i)
+        mRecordsVec[i].clear();
+
+    // Save selected energy groups
+    mSelectedEnergies[0] = ui->checkBoxMniejE2->isChecked();
+    mSelectedEnergies[1] = ui->checkBoxE2->isChecked();
+    mSelectedEnergies[2] = ui->checkBoxE3->isChecked();
+    mSelectedEnergies[3] = ui->checkBoxE4->isChecked();
+    mSelectedEnergies[4] = ui->checkBoxE5->isChecked();
+    mSelectedEnergies[5] = ui->checkBoxE6->isChecked();
+    mSelectedEnergies[6] = ui->checkBoxE7->isChecked();
+    mSelectedEnergies[7] = ui->checkBoxE8->isChecked();
+    mSelectedEnergies[8] = ui->checkBoxE9Wiecej->isChecked();
+
+    // Prepare circles diameter size
+    mPlotScale = ui->spinBoxSkala->value();
+    mPlotScale/=1000.0;
+    mDiameterSizes[0]=(1.0*mPlotScale);
+    mDiameterSizes[1]=(2.0*mPlotScale);
+    mDiameterSizes[2]=(3.0*mPlotScale);
+    mDiameterSizes[3]=(5.0*mPlotScale);
+    mDiameterSizes[4]=(7.5*mPlotScale);
+    mDiameterSizes[5]=(10.0*mPlotScale);
+    mDiameterSizes[6]=(15.0*mPlotScale);
+    mDiameterSizes[7]=(20.0*mPlotScale);
+    mDiameterSizes[8]=(30.0*mPlotScale);
+}
+
+bool MainWindow::saveToDxfFile()
+{
+    QFile file( mDxfPath );
+    if ( file.open(QIODevice::WriteOnly) )
+    {
+        // File opened successfully
+        QTextStream strim( &file );
+        // File header
+        strim << 0 << endl << "SECTION" << endl << 2 << endl << "ENTITIES" << endl << 0 << endl;
+        for( int i=0; i<=8; ++i )
+            for( int j=0; j<mRecordsVec[i].size(); ++j ){
+                strim << "CIRCLE" << endl << "8" << endl << "KOLKA E" << i+1 << endl << "10" << endl;
+                strim << mRecordsVec[i].at(j).wspY*1000.0 << endl;
+                strim << "20" << endl;
+                strim << mRecordsVec[i].at(j).wspX*1000.0 << endl;
+                strim << "40" << endl;
+                strim << mDiameterSizes[i] << endl;
+                strim << "0" << endl;
+
+                // More info for energy >= E2
+                if( i>=2 ){
+                    strim << "text" << endl << "8" << endl << "OPIS E" << i+1 << endl << "10" << endl;
+                    strim << (mRecordsVec[i].at(j).wspY*1000.0-(mDiameterSizes[i]/1.5)) << endl;
+                    strim << "20" << endl;
+                    strim << (mRecordsVec[i].at(j).wspX*1000.0-1.5) << endl;
+                    strim << "40" << endl;
+                    strim << mPlotScale*(mDiameterSizes[i]/mDiameterSizes[1]) << endl;
+                    strim << "1" << endl;
+                    QString strEner = QString::number( (mRecordsVec[i].at(j).energia), 'E', 0 );
+                    strEner.remove("+0");
+                    strim << strEner  << endl;
+                    strim << "72" << endl << "4.0" << endl << "11" << endl;
+                    strim << mRecordsVec[i].at(j).wspY*1000.0 << endl;
+                    strim << "21" << endl;
+                    strim << mRecordsVec[i].at(j).wspX*1000.0 << endl;
+                    strim << "0" << endl;
+                }
+            }
+        // File end
+        strim << "ENDSEC" << endl << 0 << endl << "EOF" <<endl;
+        file.close();
+
+        return true;
+    }
+    // Could not read the file
+    return false;
+}
+
+void MainWindow::addEnergyRecord(rekord newRecord)
+{
+    double ener = newRecord.energia;
+
+    // Below E2
+    if( mSelectedEnergies[0] && (ener >= 0.0 && ener < 100.0) )
+    {
+        mRecordsVec[0].push_back( newRecord );
+        return;
+    }
+    // E2 and higher
+    for( int iEGroup = 1; iEGroup < 9; ++ iEGroup)
+        if( mSelectedEnergies[iEGroup] && ( ener >= qPow( 10.0,  iEGroup + 1 ) &&
+                                            ener <  qPow( 10.0, (iEGroup + 2) ) ))
+        {
+            mRecordsVec[iEGroup].push_back( newRecord );
+            break;
+        }
+}
+
+bool MainWindow::readDbfDatabase()
+{
+    if( !mDbfDatabase.IsOpen() )
+        if( !mDbfDatabase.OpenFile( const_cast<char*>( mDatabasePath.toStdString().c_str() ) ) )
+        {
+            doLog(" Nie udaÅ‚o siÄ™ otworzyÄ‡ pliku bazy do odczytu. Przerywam.");
+            return false;
+        }
+    mDbfDatabase.LoadFileToMemory();
+
+    if( mDbfDatabase.GetRecordCount() )
+    {
+        doLog("Wczytano " + QString::number(mDbfDatabase.GetRecordCount()) + " rekordÃ³w do przetworzenia.");
+    }
+    else
+    {
+        doLog("Nie udaÅ‚o siÄ™ wczytaÄ‡ rekordÃ³w bazy! Przerywam.");
+        return false;
+    }
+    for( unsigned int iRekord=0; iRekord < mDbfDatabase.GetRecordCount(); iRekord++ )
+    {
+        mDbfDatabase.GetAtRecord(iRekord+1);
+        double ener = *( static_cast<double*>( mDbfDatabase.GetFieldValue(6) ) );
+        double wspX = *( static_cast<double*>( mDbfDatabase.GetFieldValue(7) ) );
+        double wspY = *( static_cast<double*>( mDbfDatabase.GetFieldValue(8) ) );
+
+        rekord tmpRecord( wspX, wspY, ener );
+        addEnergyRecord( tmpRecord );
+    }
+    mDbfDatabase.CloseFile();
+    return true;
+}
+
+void MainWindow::readXlsDatabase()
+{
+    doLog("Obsluga XLS juÅ¼ wkrÃ³tce!");
+}
+
 void MainWindow::doLog(QString str){
     ui->textEditLog->appendPlainText(str);
 }
 
-void MainWindow::on_buttonUruchom_clicked()
+void MainWindow::on_buttonStartCirclesSave_clicked()
 {
-    for(int i=0; i<=8; ++i)
-        wekRekordy[i].clear();
-    if( !baza.IsOpen() )
-        baza.OpenFile( sciezkaDoBazy );
-    baza.LoadFileToMemory();
+    // Prepare selected preferences
+    configureBeforeRun();
 
-    //petla po wszystkich rekordach
-    for( unsigned int iRekord=0; iRekord<baza.GetRecordCount(); iRekord++ ){
-        //dla kazdego rekordu sprawdzam jaka ma energie i dodaje do odpowiedniej kategorii
-        baza.GetAtRecord(iRekord+1);
-        double ener = *( static_cast<double*>( baza.GetFieldValue(6) ) );
-        double wspX = *( static_cast<double*>( baza.GetFieldValue(7) ) );
-        double wspY = *( static_cast<double*>( baza.GetFieldValue(8) ) );
-        rekord tmp( wspX, wspY, ener);
-
-        if( ui->checkBoxMniejE2->isChecked() && (ener >= 0.0 && ener < 100.0) ) {
-            wekRekordy[0].push_back(tmp);
-        } else if( ui->checkBoxE2->isChecked() && (ener >= 100.0 && ener < 1000.0) ) {
-            wekRekordy[1].push_back(tmp);
-        } else if( ui->checkBoxE3->isChecked() && (ener >= 1000.0 && ener < 10000.0) ) {
-            wekRekordy[2].push_back(tmp);
-        } else if( ui->checkBoxE4->isChecked() && (ener >= 10000.0 && ener < 100000.0) ) {
-            wekRekordy[3].push_back(tmp);
-        } else if( ui->checkBoxE5->isChecked() && (ener >= 100000.0 && ener < 1000000.0) ) {
-            wekRekordy[4].push_back(tmp);
-        } else if( ui->checkBoxE6->isChecked() && (ener >= 1000000.0 && ener < 10000000.0) ) {
-            wekRekordy[5].push_back(tmp);
-        } else if( ui->checkBoxE7->isChecked() && (ener >= 10000000.0 && ener < 100000000.0) ) {
-            wekRekordy[6].push_back(tmp);
-        } else if( ui->checkBoxE8->isChecked() && (ener >= 100000000.0 && ener < 1000000000.0) ) {
-            wekRekordy[7].push_back(tmp);
-        } else if( ui->checkBoxE9Wiecej->isChecked() && (ener >= 1000000000.0)  ) {
-            wekRekordy[8].push_back(tmp);
-        }
-
+    // Read database
+    if( mDbType == DBF_DATABASE )
+    {
+        if( !readDbfDatabase() )
+            return;
     }
-    baza.CloseFile();
+    else if( mDbType == XLS_DATABASE )
+    {
+        readXlsDatabase();
+        return;
+    }
 
-    //przygotuj srednice kolek
-    double srednice[9];
-    double skala = ui->spinBoxSkala->value();
-    skala/=1000.0;
-    srednice[0]=(1.0*skala);
-    srednice[1]=(2.0*skala);
-    srednice[2]=(3.0*skala);
-    srednice[3]=(5.0*skala);
-    srednice[4]=(7.5*skala);
-    srednice[5]=(10.0*skala);
-    srednice[6]=(15.0*skala);
-    srednice[7]=(20.0*skala);
-    srednice[8]=(30.0*skala);
-
-    //zapisz do pliku
-    QFile file( sciezkaDXF );
-    if ( file.open(QIODevice::WriteOnly) ) {
-        // file opened successfully
-        QTextStream strim( &file );
-        //poczatek pliku
-        strim << 0 << endl << "SECTION" << endl << 2 << endl << "ENTITIES" << endl << 0 << endl;
-        for( int i=0; i<=8; ++i )
-            for( int j=0; j<wekRekordy[i].size(); ++j ){
-                strim << "CIRCLE" << endl << "8" << endl << "KOLKA E" << i+1 << endl << "10" << endl;
-                strim << wekRekordy[i].at(j).wspY*1000.0 << endl;
-                strim << "20" << endl;
-                strim << wekRekordy[i].at(j).wspX*1000.0 << endl;
-                strim << "40" << endl;
-                strim << srednice[i] << endl;
-                strim << "0" << endl;
-
-                //dla energii wiekszej lub rownej od 3
-                if( i>=2 ){
-                    strim << "text" << endl << "8" << endl << "OPIS E" << i+1 << endl << "10" << endl;
-                    strim << (wekRekordy[i].at(j).wspY*1000.0-(srednice[i]/1.5)) << endl;
-                    strim << "20" << endl;
-                    strim << (wekRekordy[i].at(j).wspX*1000.0-1.5) << endl;
-                    strim << "40" << endl;
-                    strim << skala*(srednice[i]/srednice[1]) << endl;
-                    strim << "1" << endl;
-                    QString strEner = QString::number( (wekRekordy[i].at(j).energia), 'E', 0 );
-                    strEner.remove("+0");
-                    //QString tmpEner( QString( strEner.at(0) ) + "e" + QString::number(strEner.size()-1) );
-                    strim << strEner  << endl;
-                    strim << "72" << endl << "4.0" << endl << "11" << endl;
-                    strim << wekRekordy[i].at(j).wspY*1000.0 << endl;
-                    strim << "21" << endl;
-                    strim << wekRekordy[i].at(j).wspX*1000.0 << endl;
-                    strim << "0" << endl;
-                }
-            }
-        //koniec pliku
-        strim << "ENDSEC" << endl << 0 << endl << "EOF" <<endl;
-        file.close();
-
-        //wysweitl podsumowanie
+    // Save to DXF file
+    if( saveToDxfFile() )
+    {
+        // Show summary
         doLog("---------------------------------------------------------");
-        doLog("Zapisujê kó³ka z energiami:");
-        if( wekRekordy[0].size() )
-            doLog( "-> mniejsza od e2: " +QString::number(wekRekordy[0].size()) + " rekordów.");
+        doLog("ZapisujÄ™ kÃ³Å‚ka z energiami:");
+        if( mRecordsVec[0].size() )
+            doLog( "-> mniejsza od e2: " +QString::number(mRecordsVec[0].size()) + " rekordÃ³w.");
         for( int kat=1; kat<8; ++kat)
-            if( wekRekordy[kat].size() )
-                doLog( "-> e" +QString::number(kat+1) +": " +QString::number(wekRekordy[kat].size()) +
-                            " rekordów.");
-        if( wekRekordy[8].size() )
-            doLog( "-> wiêksza lub równa e9: " +QString::number(wekRekordy[8].size()) + " rekordów.");
+            if( mRecordsVec[kat].size() )
+                doLog( "-> e" +QString::number(kat+1) + ": " +
+                       QString::number(mRecordsVec[kat].size()) + " rekordÃ³w.");
+        if( mRecordsVec[8].size() )
+            doLog( "-> wiÄ™ksza lub rÃ³wna e9: " + QString::number(mRecordsVec[8].size()) + " rekordÃ³w.");
 
-        //odblokuj przycisk otwierania kolek
-        ui->buttonOtworzKolka->setEnabled(true);
-        ui->buttonOtworzFolder->setEnabled(true);
+        // Change buttons status
+        ui->buttonOpenDxfFile->setEnabled(true);
+        ui->buttonOpenDxfPathFolder->setEnabled(true);
 
-        doLog("Kó³ka zosta³y poprawnie zapisane w pliku "+file.fileName() + "\n");
-    } else {
-        doLog("Nie uda³o siê zapisaæ kó³ek :(");
+        doLog("KÃ³Å‚ka zostaÅ‚y poprawnie zapisane w pliku "+ mDxfPath + "\n");
     }
-
+    else
+    {
+        doLog("Nie udaÅ‚o siÄ™ zapisaÄ‡ kÃ³Å‚ek do pliku DXF :(");
+    }
 }
 
-void MainWindow::on_buttonOtworz_clicked()
+void MainWindow::on_buttonOpenDb_clicked()
 {
-    QString plik = QFileDialog::getOpenFileName(this, "Otwórz bazê danych",QDir::currentPath(),
-                                "Pliki dBase III (*.DBF)");
-    //jesli wybrano jakis plik
+    QString plik = QFileDialog::getOpenFileName(this, "OtwÃ³rz bazÄ™ danych",QDir::currentPath(),
+                                                "Bazy danych (*.DBF *.XLS)");
+    // If file was selected
     if( !plik.isEmpty() ){
-        sciezkaDoBazy = new char[ plik.size() ];
-        for(int i=0; i<plik.size(); i++)
-            sciezkaDoBazy[i] = plik.at(i).toAscii();
+        mDatabasePath =  plik;
+        // DBF Database
+        if( plik.endsWith("DBF", Qt::CaseInsensitive) )
+        {
+            mDbType = DBF_DATABASE;
 
-        //otwieram baze
-        if ( baza.OpenFile( sciezkaDoBazy ) ){
-            ui->lineEditInputDbPath->setText( plik );
-            ui->buttonUruchom->setEnabled(true);
-            plik.truncate(plik.size()-4);
-
-            if(sciezkaDXF.isEmpty()){
-                sciezkaDXF = QString( plik + "_KOLKA.DXF" );
-                ui->lineEditDXFpath->setText( sciezkaDXF );
+            // Read database
+            if ( mDbfDatabase.OpenFile( const_cast<char*>( mDatabasePath.toStdString().c_str() ) ) ){
+                doLog("Baza pomyÅ›lnie otwarta, zawiera "+
+                      QString::number(mDbfDatabase.GetRecordCount()) +" rekordÃ³w.");
             }
-            doLog( "Baza pomyœlnie otwarta, zawiera "+ QString::number(baza.GetRecordCount()) +" rekordów." );
-
-            //wylaczam przyciski bo nowa sciezka
-            ui->buttonOtworzKolka->setDisabled(true);
-            ui->buttonOtworzFolder->setDisabled(true);
-        } else {
-            doLog("Nie uda³o siê otworzyæ bazy danych :(");
+            else
+            {
+                doLog("Nie udaÅ‚o siÄ™ otworzyÄ‡ bazy danych :(");
+            }
         }
+        // XLS Database
+        else if( plik.endsWith("XLS", Qt::CaseInsensitive) )
+        {
+            mDbType = XLS_DATABASE;
+        }
+        // Other
+        else
+        {
+            doLog("ZÅ‚y rodzaj bazy danych! Wybierz .DBF lub .XLS!");
+            return;
+        }
+
+        // Set input database path
+        ui->lineEditInputDbPath->setText( plik );
+
+        // Set default DXF path
+        plik.truncate(plik.size()-4);
+        if(mDxfPath.isEmpty()){
+            mDxfPath = QString( plik + "_KOLKA.DXF" );
+            ui->lineEditDXFpath->setText( mDxfPath );
+        }
+
+        // Change buttons status
+        ui->lineEditDXFpath->setEnabled(true);
+        ui->buttonSelectDxfPath->setEnabled(true);
+        ui->buttonStartCirclesSave->setEnabled(true);
+        ui->buttonOpenDxfFile->setDisabled(true);
+        ui->buttonOpenDxfPathFolder->setDisabled(true);
     }
-
 }
 
-void MainWindow::on_buttonWybierzDXF_clicked()
+void MainWindow::on_buttonSelectDxfPath_clicked()
 {
-    sciezkaDXF = QFileDialog::getSaveFileName(this, "Wybierz miejsce zapisu DXF",QDir::currentPath(),
-                                "Plik wynikowy z kó³kami (*.DXF)");
-    ui->lineEditDXFpath->setText( sciezkaDXF );
+    QString nowaSciezka = QFileDialog::getSaveFileName(this, "Wybierz miejsce zapisu DXF",QDir::currentPath(),
+                                                       "Plik wynikowy z kÃ³Å‚kami (*.DXF)");
+    if( nowaSciezka != "" )
+        mDxfPath = nowaSciezka;
+    ui->lineEditDXFpath->setText( mDxfPath );
 }
 
-void MainWindow::on_actionWyj_cie_triggered()
+void MainWindow::on_actionExit_triggered()
 {
     qApp->exit(0);
 }
 
-void MainWindow::on_actionO_programie_triggered()
+void MainWindow::on_actionAbout_triggered()
 {
-    QMessageBox::information(this, "O programie","Twórcy programu KolkaDXF: \nMateusz i Krzysztof Przenzak");
+    QMessageBox::information(this, "O programie","TwÃ³rcy: Mateusz i Krzysztof Przenzak"
+                                                 "\nWersja: 2.0"
+                                                 "\nData wydania: 26.02.2015");
 }
 
-
-void MainWindow::on_buttonOtworzKolka_clicked()
+void MainWindow::on_buttonOpenDxfFile_clicked()
 {
-    QDesktopServices::openUrl( QUrl( sciezkaDXF ) );
+    QDesktopServices::openUrl( QUrl( mDxfPath ) );
 }
 
-void MainWindow::on_buttonOtworzFolder_clicked()
+void MainWindow::on_buttonOpenDxfPathFolder_clicked()
 {
-    QStringList strListTmp = sciezkaDXF.split("/");
-    QString strTmpSciezka = sciezkaDXF;
+    QStringList strListTmp = mDxfPath.split("/");
+    QString strTmpSciezka = mDxfPath;
     strTmpSciezka.truncate( strTmpSciezka.size()-strListTmp.last().size() );
     QDesktopServices::openUrl( QUrl( "file:///" + strTmpSciezka ) );
 }

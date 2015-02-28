@@ -17,10 +17,10 @@
    </size>
   </property>
   <property name="windowTitle">
-   <string>KółkaDXF 12.08.2012</string>
+   <string>KółkaDXF 2.0</string>
   </property>
   <widget class="QWidget" name="centralWidget">
-   <widget class="QPushButton" name="buttonUruchom">
+   <widget class="QPushButton" name="buttonStartCirclesSave">
     <property name="enabled">
      <bool>false</bool>
     </property>
@@ -31,6 +31,12 @@
       <width>121</width>
       <height>31</height>
      </rect>
+    </property>
+    <property name="font">
+     <font>
+      <weight>75</weight>
+      <bold>true</bold>
+     </font>
     </property>
     <property name="text">
      <string>Zapisz kółka</string>
@@ -106,7 +112,7 @@
      </property>
     </widget>
    </widget>
-   <widget class="QPushButton" name="buttonOtworzKolka">
+   <widget class="QPushButton" name="buttonOpenDxfFile">
     <property name="enabled">
      <bool>false</bool>
     </property>
@@ -122,7 +128,7 @@
      <string>Otwórz plik DXF</string>
     </property>
    </widget>
-   <widget class="QPushButton" name="buttonOtworzFolder">
+   <widget class="QPushButton" name="buttonOpenDxfPathFolder">
     <property name="enabled">
      <bool>false</bool>
     </property>
@@ -241,58 +247,67 @@
      <rect>
       <x>10</x>
       <y>10</y>
-      <width>431</width>
+      <width>441</width>
       <height>51</height>
      </rect>
     </property>
     <property name="title">
-     <string>Plik wejściowy z bazą danych DBF</string>
+     <string>Plik wejściowy z bazą danych DBF lub XLS</string>
     </property>
     <widget class="QLineEdit" name="lineEditInputDbPath">
      <property name="geometry">
       <rect>
        <x>10</x>
        <y>20</y>
-       <width>321</width>
+       <width>341</width>
        <height>20</height>
       </rect>
      </property>
-     <property name="text">
+     <property name="placeholderText">
       <string>Wybierz plik z bazą danych -&gt;</string>
      </property>
+     <property name="clearButtonEnabled">
+      <bool>true</bool>
+     </property>
     </widget>
-    <widget class="QPushButton" name="buttonOtworz">
+    <widget class="QPushButton" name="buttonOpenDb">
      <property name="geometry">
       <rect>
-       <x>340</x>
+       <x>360</x>
        <y>20</y>
-       <width>81</width>
+       <width>71</width>
        <height>23</height>
       </rect>
      </property>
      <property name="text">
-      <string>Otwórz</string>
+      <string>Otwórz bazę</string>
      </property>
     </widget>
    </widget>
    <widget class="QGroupBox" name="groupBox_4">
+    <property name="enabled">
+     <bool>true</bool>
+    </property>
     <property name="geometry">
      <rect>
       <x>10</x>
       <y>60</y>
-      <width>431</width>
+      <width>441</width>
       <height>51</height>
      </rect>
     </property>
     <property name="title">
      <string>Plik wynikowy z kółkami DXF</string>
     </property>
-    <widget class="QPushButton" name="buttonWybierzDXF">
+    <widget class="QPushButton" name="buttonSelectDxfPath">
+     <property name="enabled">
+      <bool>false</bool>
+     </property>
      <property name="geometry">
       <rect>
-       <x>340</x>
+       <x>360</x>
        <y>20</y>
-       <width>81</width>
+       <width>71</width>
        <height>23</height>
       </rect>
      </property>
@@ -301,16 +316,22 @@
      </property>
     </widget>
     <widget class="QLineEdit" name="lineEditDXFpath">
+     <property name="enabled">
+      <bool>false</bool>
+     </property>
      <property name="geometry">
       <rect>
        <x>10</x>
        <y>20</y>
-       <width>321</width>
+       <width>341</width>
        <height>20</height>
       </rect>
      </property>
-     <property name="text">
+     <property name="placeholderText">
       <string>Wybierz gdzie zapisać .DXF -&gt;</string>
+     </property>
+     <property name="clearButtonEnabled">
+      <bool>true</bool>
      </property>
     </widget>
    </widget>
@@ -328,19 +349,19 @@
     <property name="title">
      <string>KółkaDXF</string>
     </property>
-    <addaction name="actionO_programie"/>
+    <addaction name="actionAbout"/>
     <addaction name="separator"/>
-    <addaction name="actionWyj_cie"/>
+    <addaction name="actionExit"/>
    </widget>
    <addaction name="menuK_kaDXF"/>
   </widget>
   <widget class="QStatusBar" name="statusBar"/>
-  <action name="actionWyj_cie">
+  <action name="actionExit">
    <property name="text">
     <string>Wyjście</string>
    </property>
   </action>
-  <action name="actionO_programie">
+  <action name="actionAbout">
    <property name="text">
     <string>O programie</string>
    </property>

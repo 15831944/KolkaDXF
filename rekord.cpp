@@ -2,7 +2,6 @@
 
 rekord::rekord()
 {
-
 }
 
 rekord::rekord(double wspx, double wspy, double energ){
