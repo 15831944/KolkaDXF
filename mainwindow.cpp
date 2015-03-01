@@ -9,6 +9,10 @@
 #include <QUrl>
 #include <QtCore/qmath.h>
 
+extern "C" {
+    #include <libxls/xls.h>
+}
+
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
     ui(new Ui::MainWindow)
@@ -61,7 +65,9 @@ bool MainWindow::saveToDxfFile()
         QTextStream strim( &file );
         // File header
         strim << 0 << endl << "SECTION" << endl << 2 << endl << "ENTITIES" << endl << 0 << endl;
-        for( int i=0; i<=8; ++i )
+
+        // Basic info for energy < E2
+        for( int i=0; i<=1; ++i )
             for( int j=0; j<mRecordsVec[i].size(); ++j ){
                 strim << "CIRCLE" << endl << "8" << endl << "KOLKA E" << i+1 << endl << "10" << endl;
                 strim << mRecordsVec[i].at(j).wspY*1000.0 << endl;
@@ -70,26 +76,37 @@ bool MainWindow::saveToDxfFile()
                 strim << "40" << endl;
                 strim << mDiameterSizes[i] << endl;
                 strim << "0" << endl;
-
-                // More info for energy >= E2
-                if( i>=2 ){
-                    strim << "text" << endl << "8" << endl << "OPIS E" << i+1 << endl << "10" << endl;
-                    strim << (mRecordsVec[i].at(j).wspY*1000.0-(mDiameterSizes[i]/1.5)) << endl;
-                    strim << "20" << endl;
-                    strim << (mRecordsVec[i].at(j).wspX*1000.0-1.5) << endl;
-                    strim << "40" << endl;
-                    strim << mPlotScale*(mDiameterSizes[i]/mDiameterSizes[1]) << endl;
-                    strim << "1" << endl;
-                    QString strEner = QString::number( (mRecordsVec[i].at(j).energia), 'E', 0 );
-                    strEner.remove("+0");
-                    strim << strEner  << endl;
-                    strim << "72" << endl << "4.0" << endl << "11" << endl;
-                    strim << mRecordsVec[i].at(j).wspY*1000.0 << endl;
-                    strim << "21" << endl;
-                    strim << mRecordsVec[i].at(j).wspX*1000.0 << endl;
-                    strim << "0" << endl;
-                }
             }
+
+        // More info for energy >= E2
+        for( int i=2; i<=8; ++i )
+            for( int j=0; j<mRecordsVec[i].size(); ++j )
+            {
+                strim << "CIRCLE" << endl << "8" << endl << "KOLKA E" << i+1 << endl << "10" << endl;
+                strim << mRecordsVec[i].at(j).wspY*1000.0 << endl;
+                strim << "20" << endl;
+                strim << mRecordsVec[i].at(j).wspX*1000.0 << endl;
+                strim << "40" << endl;
+                strim << mDiameterSizes[i] << endl;
+                strim << "0" << endl;
+
+                strim << "text" << endl << "8" << endl << "OPIS E" << i+1 << endl << "10" << endl;
+                strim << (mRecordsVec[i].at(j).wspY*1000.0-(mDiameterSizes[i]/1.5)) << endl;
+                strim << "20" << endl;
+                strim << (mRecordsVec[i].at(j).wspX*1000.0-1.5) << endl;
+                strim << "40" << endl;
+                strim << mPlotScale*(mDiameterSizes[i]/mDiameterSizes[1]) << endl;
+                strim << "1" << endl;
+                QString strEner = QString::number( (mRecordsVec[i].at(j).energia), 'E', 0 );
+                strEner.remove("+0");
+                strim << strEner  << endl;
+                strim << "72" << endl << "4.0" << endl << "11" << endl;
+                strim << mRecordsVec[i].at(j).wspY*1000.0 << endl;
+                strim << "21" << endl;
+                strim << mRecordsVec[i].at(j).wspX*1000.0 << endl;
+                strim << "0" << endl;
+            }
+
         // File end
         strim << "ENDSEC" << endl << 0 << endl << "EOF" <<endl;
         file.close();
@@ -153,9 +170,34 @@ bool MainWindow::readDbfDatabase()
     return true;
 }
 
-void MainWindow::readXlsDatabase()
+bool MainWindow::readXlsDatabase()
 {
-    doLog("Obsluga XLS już wkrótce!");
+    xlsWorkBook* pWorkBook;
+    xlsWorkSheet* pWorkSheet;
+    struct st_row::st_row_data* row;
+
+    pWorkBook = xls_open( const_cast<char*>( mDatabasePath.toStdString().c_str() ),
+                          const_cast<char*>("UTF-8") );
+
+    if (pWorkBook != NULL)
+    {
+        pWorkSheet = xls_getWorkSheet(pWorkBook,0);
+        xls_parseWorkSheet(pWorkSheet);
+
+        for (int t=1; t <= pWorkSheet->rows.lastrow; t++)
+        {
+            row = &pWorkSheet->rows.row[t];
+
+            rekord tmpRecord( row->cells.cell[6].d,
+                              row->cells.cell[7].d,
+                              row->cells.cell[5].d );
+            addEnergyRecord( tmpRecord );
+        }
+    } else {
+        doLog("Nie udało się wczytać rekordów bazy! Przerywam.");
+        return false;
+    }
+    return true;
 }
 
 void MainWindow::doLog(QString str){
@@ -175,8 +217,8 @@ void MainWindow::on_buttonStartCirclesSave_clicked()
     }
     else if( mDbType == XLS_DATABASE )
     {
-        readXlsDatabase();
-        return;
+        if( !readXlsDatabase() )
+            return;
     }
 
     // Save to DXF file
@@ -232,6 +274,24 @@ void MainWindow::on_buttonOpenDb_clicked()
         else if( plik.endsWith("XLS", Qt::CaseInsensitive) )
         {
             mDbType = XLS_DATABASE;
+
+            xlsWorkBook* pWorkBook;
+            xlsWorkSheet* pWorkSheet;
+
+            pWorkBook = xls_open( const_cast<char*>( mDatabasePath.toStdString().c_str() ),
+                                  const_cast<char*>("UTF-8") );
+
+            if (pWorkBook != NULL)
+            {
+                pWorkSheet = xls_getWorkSheet(pWorkBook,0);
+                xls_parseWorkSheet(pWorkSheet);
+                doLog("Arkusz pomyślnie otwarty, zawiera "+
+                      QString::number(pWorkSheet->rows.lastrow) +" rekordów.");
+            }
+            else
+            {
+                doLog("Nie udało się otworzyć bazy danych :(");
+            }
         }
         // Other
         else

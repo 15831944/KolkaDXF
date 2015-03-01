@@ -38,7 +38,7 @@ private:
 
     void configureBeforeRun();
     bool readDbfDatabase();
-    void readXlsDatabase();
+    bool readXlsDatabase();
     bool saveToDxfFile();
     void addEnergyRecord(rekord newRecord);
     void doLog(QString str);
